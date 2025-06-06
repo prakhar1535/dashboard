@@ -237,11 +237,19 @@ const ReportsHeader = ({ className }: ReportsHeaderProps) => {
   };
 
   const handleExport = async () => {
+    // Ensure this only runs on the client side
+    if (typeof window === "undefined") {
+      console.error("PDF export is only available on the client side");
+      return;
+    }
+
     try {
       setIsExporting(true);
       await exportToPDF(processedData, filters, searchQuery);
     } catch (error) {
       console.error("Export failed:", error);
+      // You could add a toast notification here for error feedback
+    } finally {
       setIsExporting(false);
     }
   };

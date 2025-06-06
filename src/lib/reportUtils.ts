@@ -378,14 +378,23 @@ export const copyToClipboard = async (text: string): Promise<boolean> => {
   }
 };
 
+// PDF Export functionality
 export const exportToPDF = async (
   data: ExecutionData[],
   filters: FilterOptions,
   searchQuery?: string
 ): Promise<void> => {
+  // Ensure this only runs on the client side
+  if (typeof window === "undefined") {
+    throw new Error("PDF export is only available on the client side");
+  }
+
   try {
-    const jsPDF = (await import("jspdf")).default;
-    const autoTable = (await import("jspdf-autotable")).default;
+    // Dynamic import to avoid SSR issues
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable"),
+    ]);
 
     const doc = new jsPDF({
       orientation: "landscape",
@@ -393,15 +402,18 @@ export const exportToPDF = async (
       format: "a4",
     });
 
+    // Add title
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
     doc.text("Execution Reports", 20, 20);
 
+    // Add export date
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     const exportDate = new Date().toLocaleString();
     doc.text(`Exported on: ${exportDate}`, 20, 30);
 
+    // Add filter information
     let yPosition = 40;
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
@@ -411,14 +423,17 @@ export const exportToPDF = async (
     doc.setFont("helvetica", "normal");
     yPosition += 8;
 
+    // Time Period
     doc.text(`Time Period: ${filters.timePeriod}`, 25, yPosition);
     yPosition += 6;
 
+    // Search Query
     if (searchQuery && searchQuery.trim()) {
       doc.text(`Search: "${searchQuery}"`, 25, yPosition);
       yPosition += 6;
     }
 
+    // Execution States
     if (filters.executionState && filters.executionState.length > 0) {
       doc.text(
         `Execution States: ${filters.executionState.join(", ")}`,
@@ -428,16 +443,19 @@ export const exportToPDF = async (
       yPosition += 6;
     }
 
+    // Types
     if (filters.type && filters.type.length > 0) {
       doc.text(`Types: ${filters.type.join(", ")}`, 25, yPosition);
       yPosition += 6;
     }
 
+    // Executed By
     if (filters.executedBy && filters.executedBy.length > 0) {
       doc.text(`Executed By: ${filters.executedBy.join(", ")}`, 25, yPosition);
       yPosition += 6;
     }
 
+    // Add summary statistics
     const stats = getDataStatistics(data);
     yPosition += 5;
     doc.setFontSize(12);
@@ -457,6 +475,7 @@ export const exportToPDF = async (
     yPosition += 6;
     doc.text(`Errors: ${stats.error}`, 25, yPosition);
 
+    // Prepare table data
     const tableHeaders = [
       "Execution ID",
       "Host Name",
@@ -481,6 +500,7 @@ export const exportToPDF = async (
       row.executedBy,
     ]);
 
+    // Add table
     autoTable(doc, {
       head: [tableHeaders],
       body: tableData,
@@ -490,28 +510,29 @@ export const exportToPDF = async (
         cellPadding: 3,
       },
       headStyles: {
-        fillColor: [71, 85, 105],
+        fillColor: [71, 85, 105], // slate-600
         textColor: 255,
         fontStyle: "bold",
       },
       alternateRowStyles: {
-        fillColor: [248, 250, 252],
+        fillColor: [248, 250, 252], // slate-50
       },
       columnStyles: {
-        0: { cellWidth: 25 },
-        1: { cellWidth: 30 },
-        2: { cellWidth: 25 },
-        3: { cellWidth: 35 },
-        4: { cellWidth: 35 },
-        5: { cellWidth: 20 },
-        6: { cellWidth: 15 },
-        7: { cellWidth: 20 },
-        8: { cellWidth: 25 },
+        0: { cellWidth: 25 }, // Execution ID
+        1: { cellWidth: 30 }, // Host Name
+        2: { cellWidth: 25 }, // Host IP
+        3: { cellWidth: 35 }, // Execution Name
+        4: { cellWidth: 35 }, // Start Date
+        5: { cellWidth: 20 }, // State
+        6: { cellWidth: 15 }, // Progress
+        7: { cellWidth: 20 }, // Type
+        8: { cellWidth: 25 }, // Executed By
       },
       margin: { left: 20, right: 20 },
       tableWidth: "auto",
     });
 
+    // Add footer with page numbers
     const pageCount = doc.internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
@@ -524,12 +545,14 @@ export const exportToPDF = async (
       );
     }
 
+    // Generate filename with timestamp
     const timestamp = new Date()
       .toISOString()
       .slice(0, 19)
       .replace(/[:.]/g, "-");
     const filename = `execution-reports-${timestamp}.pdf`;
 
+    // Save the PDF
     doc.save(filename);
   } catch (error) {
     console.error("Failed to export PDF:", error);
